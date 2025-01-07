@@ -143,29 +143,6 @@ st.markdown("""
         border-radius: 1.5rem !important;
         width: auto !important;
     }
-            
-                /* New filter panel styles */
-    .filter-column {
-        position: sticky;
-        top: 0;
-        background: #363636;
-        border-left: 1px solid #404040;
-        padding: 1rem;
-        height: 100vh;
-        overflow-y: auto;
-    }
-    
-    .research-input-container {
-        display: flex;
-        gap: 1rem;
-        align-items: center;
-        margin-top: 1rem;
-    }
-    
-    .filter-button-container {
-        display: flex;
-        justify-content: flex-end;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -245,34 +222,34 @@ class ResearchChat:
         self.topic_manager = TopicManager()
 
     def create_filter_panel(self):
-        st.markdown('<div class="filter-panel">', unsafe_allow_html=True)
-        st.markdown("### Research Filters")
-        st.divider()
-        
-        st.markdown("#### Year Range")
-        years = st.slider("Select years", 2000, 2024, (2020, 2024))
-        
-        st.markdown("#### Source Type")
-        st.multiselect(
-            "Select sources",
-            ["Academic Papers", "Journals", "Conference Proceedings", "Books"],
-            default=["Academic Papers"]
-        )
-        
-        st.markdown("#### Research Domain")
-        st.multiselect(
-            "Select domains",
-            ["Computer Science", "Engineering", "Mathematics", "Physics"],
-            default=["Computer Science"]
-        )
-        
-        st.markdown("#### Country/Region")
-        st.multiselect(
-            "Select regions",
-            ["North America", "Europe", "Asia", "Global"],
-            default=["Global"]
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.session_state.show_filters = not st.session_state.show_filters
+
+        if st.session_state.show_filters:
+            with st.sidebar.container():
+                with st.expander("Search Filters", expanded=True):
+                    st.markdown("### Year Range")
+                    years = st.slider("Select years", 2000, 2024, (2020, 2024))
+                    
+                    st.markdown("### Source Type")
+                    st.multiselect(
+                        "Select sources",
+                        ["Academic Papers", "Journals", "Conference Proceedings", "Books"],
+                        default=["Academic Papers"]
+                    )
+                    
+                    st.markdown("### Research Domain")
+                    st.multiselect(
+                        "Select domains",
+                        ["Computer Science", "Engineering", "Mathematics", "Physics"],
+                        default=["Computer Science"]
+                    )
+                    
+                    st.markdown("### Country/Region")
+                    st.multiselect(
+                        "Select regions",
+                        ["North America", "Europe", "Asia", "Global"],
+                        default=["Global"]
+                    )
 
     def create_topic_sidebar(self):
         with st.sidebar:
@@ -344,110 +321,99 @@ class ResearchChat:
         summary = analytics.generate_summary()
 
         # Topic header with actions
-        main_col, filter_col, share_col = st.columns([6,1,1])
-        with main_col:
+        col1, col2, col3 = st.columns([6,1,1])
+        with col1:
             st.title(topic["name"])
-            # Analytics panel
-            with st.expander("📊 Research Analytics", expanded=True):
-                metrics = analytics.calculate_metrics()
-                cols = st.columns(4)
-                for (metric, value), col in zip(metrics.items(), cols):
-                    with col:
-                        st.metric(metric, value)
-                
-                st.subheader("Research Progress")
-                progress_data = pd.DataFrame({
-                    'Metric': ['Depth', 'Quality', 'Coverage'],
-                    'Score': [85, 92, 78]
-                })
-                st.bar_chart(progress_data.set_index('Metric'))
-            
-            # Summary panel
-            with st.expander("📝 Research Summary", expanded=True):
-                tabs = st.tabs(["Interaction Summary", "Sources", "Timeline", "Key Findings"])
-                
-                with tabs[0]:
-                    st.markdown("#### Interaction Summary")
-                    for finding in analytics.generate_summary():
-                        st.markdown("### Key Interactions")
-                
-                        for msg in summary:
-                            role_icon = "👤" if msg["role"] == "user" else "🤖"
-                            role_class = "human-message" if msg["role"] == "user" else "ai-message"
-                            
-                            st.markdown(f"""
-                                <div class="conversation-item {role_class}">
-                                    <strong>{role_icon} {msg["role"].title()}</strong><br>
-                                    {msg["content"]}
-                                </div>
-                            """, unsafe_allow_html=True)
-                
-                with tabs[1]:
-                    st.markdown("#### Sources")
-                    for source in analytics.extract_sources():
-                        st.markdown(f"- [{source['title']}]({source['url']}) - {source['relevance']}")
-                
-                with tabs[2]:
-                    st.markdown("#### Research Timeline")
-                    for msg in topic["messages"]:
-                        st.markdown(f"**{msg['timestamp']}** ({msg['role']})")
-                with tabs[3]:
-                    st.markdown("#### Key Findings")
-                    for finding in analytics.analyze_topic():
-                        st.markdown(f"• {finding}")
-
-                # Chat interface
-                st.markdown("### Research Chat")
-                for message in topic["messages"]:
-                    with st.chat_message(message["role"]):
-                        st.markdown(message["content"])
-                
-                chat_container = st.container()
-                with chat_container:
-                    input_col, filter_btn_col = st.columns([5,1])
-                    with input_col:
-                        prompt = st.chat_input("Enter your Research query...")
-                    with filter_btn_col:
-                        if st.button("🔍 Filter"):
-                            st.session_state.show_filters = not st.session_state.show_filters
-
-
-                if prompt:
-                    # Add user message
-                    topic["messages"].append({
-                        "role": "user",
-                        "content": prompt,
-                        "timestamp": datetime.now().isoformat()
-                    })
-                    
-                    try:
-                        # Get AI response
-                        with st.chat_message("assistant"):
-                            stream = self.client.chat.completions.create(
-                                model="gpt-4-turbo-preview",
-                                messages=[
-                                    {"role": m["role"], "content": m["content"]}
-                                    for m in topic["messages"]
-                                ],
-                                stream=True
-                            )
-                            response = st.write_stream(stream)
-                        
-                        # Store AI response
-                        topic["messages"].append({
-                            "role": "assistant",
-                            "content": response,
-                            "timestamp": datetime.now().isoformat()
-                        })
-                        
-                    except Exception as e:
-                        st.error(f"Error: {str(e)}")
-        with share_col:
+        with col2:
+            filter_btn = st.button("🔍 Filter", on_click=self.create_filter_panel)
+        with col3:
             st.button("🔗 Collaborate ", use_container_width=True)
-        with filter_col:
-            if st.session_state.show_filters:
-                self.create_filter_panel()
+        
+        # Analytics panel
+        with st.expander("📊 Research Analytics", expanded=True):
+            metrics = analytics.calculate_metrics()
+            cols = st.columns(4)
+            for (metric, value), col in zip(metrics.items(), cols):
+                with col:
+                    st.metric(metric, value)
+            
+            st.subheader("Research Progress")
+            progress_data = pd.DataFrame({
+                'Metric': ['Depth', 'Quality', 'Coverage'],
+                'Score': [85, 92, 78]
+            })
+            st.bar_chart(progress_data.set_index('Metric'))
+        
+        # Summary panel
+        with st.expander("📝 Research Summary", expanded=True):
+            tabs = st.tabs(["Interaction Summary", "Sources", "Timeline", "Key Findings"])
+            
+            with tabs[0]:
+                st.markdown("#### Interaction Summary")
+                for finding in analytics.generate_summary():
+                    st.markdown("### Key Interactions")
+            
+                    for msg in summary:
+                        role_icon = "👤" if msg["role"] == "user" else "🤖"
+                        role_class = "human-message" if msg["role"] == "user" else "ai-message"
+                        
+                        st.markdown(f"""
+                            <div class="conversation-item {role_class}">
+                                <strong>{role_icon} {msg["role"].title()}</strong><br>
+                                {msg["content"]}
+                            </div>
+                        """, unsafe_allow_html=True)
+            
+            with tabs[1]:
+                st.markdown("#### Sources")
+                for source in analytics.extract_sources():
+                    st.markdown(f"- [{source['title']}]({source['url']}) - {source['relevance']}")
+            
+            with tabs[2]:
+                st.markdown("#### Research Timeline")
+                for msg in topic["messages"]:
+                    st.markdown(f"**{msg['timestamp']}** ({msg['role']})")
+            with tabs[3]:
+                st.markdown("#### Key Findings")
+                for finding in analytics.analyze_topic():
+                    st.markdown(f"• {finding}")
 
+        # Chat interface
+        st.markdown("### Research Chat")
+        for message in topic["messages"]:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+        
+        if prompt := st.chat_input("Enter your Research query..."):
+            # Add user message
+            topic["messages"].append({
+                "role": "user",
+                "content": prompt,
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            try:
+                # Get AI response
+                with st.chat_message("assistant"):
+                    stream = self.client.chat.completions.create(
+                        model="gpt-4-turbo-preview",
+                        messages=[
+                            {"role": m["role"], "content": m["content"]}
+                            for m in topic["messages"]
+                        ],
+                        stream=True
+                    )
+                    response = st.write_stream(stream)
+                
+                # Store AI response
+                topic["messages"].append({
+                    "role": "assistant",
+                    "content": response,
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
     
     def run(self):
         self.create_topic_sidebar()
